@@ -66,6 +66,7 @@ public class RLAgent extends Agent {
     public class Footman {
     	public int id, x, y, hp, team;
     	public int lastTarget;
+    	public boolean dead = false;
     	public Footman(int id, State.StateView stateView, History.HistoryView historyView) {
     		this.id = id;
     		Unit.UnitView unit = stateView.getUnit(id);
@@ -77,6 +78,13 @@ public class RLAgent extends Agent {
     		//Presumably every action here is a composite attack, and thus a Targeted Action
     		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
     		this.lastTarget = lastAction.getTargetId();
+    		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
+    		List<DeathLog> deathLogs = historyView.getDeathLogs(stateView.getTurnNumber()-1);
+    		for(DeathLog death : deathLogs) {
+    			if(death.getDeadUnitID() == this.id) {
+    				this.dead = true;
+    			}
+    		}
     	}
     	
     	/**
@@ -320,7 +328,48 @@ public class RLAgent extends Agent {
      * @return The current reward
      */
     public double calculateReward(State.StateView stateView, History.HistoryView historyView, int footmanId) {
-    	return 0;
+    	Footman attacker = new Footman(footmanId, stateView, historyView);
+    	Footman defender = new Footman(attacker.lastTarget, stateView, historyView);
+    	
+    	//Killed target?
+    	double killedTarget = 0;
+    	if(defender.dead) {
+    		killedTarget = 1;
+    	}
+    	
+    	//Died?
+    	if(attacker.dead) {
+    		//Short circuit and return a poor reward. Don't die
+    		return -100;
+    	}
+    	
+    	//Damage dealt
+    	double damageDealt = 0;
+    	for(DamageLog damageLog : historyView.getDamageLogs(stateView.getTurnNumber()-1)) {
+    		if(damageLog.getAttackerID() == attacker.id) {
+    			damageDealt = damageLog.getDamage();
+    			break;
+    		}
+    	}
+    	
+    	//Damage taken
+    	double damageTaken = 0;
+    	for(DamageLog damageLog : historyView.getDamageLogs(stateView.getTurnNumber()-1)) {
+    		if(damageLog.getDefenderID() == attacker.id) {
+    			damageTaken = damageLog.getDamage();
+    			break;
+    		}
+    	}
+    	
+    	//Started action last turn
+    	//I guess it's beneficial if this footman just recently started an action?
+    	double startedLastTurn = 0;
+    	Action action = historyView.getCommandsIssued(playernum, stateView.getTurnNumber()-1).get(attacker.id);
+    	if(action != null) {
+    		startedLastTurn = 1;
+    	}
+    	
+    	return killedTarget + damageDealt - damageTaken + startedLastTurn;
     }
 
     /**
@@ -341,7 +390,16 @@ public class RLAgent extends Agent {
                              History.HistoryView historyView,
                              int attackerId,
                              int defenderId) {
-        return 0;
+    	double QSum = 0;
+    	
+    	double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
+    	if(featureVector.length != weights.length) {
+    		System.err.println(String.format("Error: Different sizes of weights: %i and feature vector: %i",weights.length, featureVector.length));
+    	}
+    	for(int i = 0; i < featureVector.length; i++) {
+    		QSum += weights[i] * featureVector[i];
+    	}
+        return QSum;
     }
 
     /**
