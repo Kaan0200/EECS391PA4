@@ -267,7 +267,13 @@ public class RLAgent extends Agent {
      * @return The updated weight vector.
      */
     public double[] updateWeights(double[] oldWeights, double[] oldFeatures, double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
-        return null;
+        for(int i = 0; i < oldWeights.length; i++) {
+        	double reward = calculateReward(stateView, historyView, footmanId);
+        	int bestTarget = selectAction(stateView, historyView, footmanId);
+        	weights[i] = oldWeights[i] + learningRate * 
+        			(reward + gamma * calcQValue(stateView, historyView, footmanId, bestTarget)) * oldFeatures[i];
+        }
+    	return null;
     }
 
     /**
@@ -334,7 +340,7 @@ public class RLAgent extends Agent {
     	//Killed target?
     	double killedTarget = 0;
     	if(defender.dead) {
-    		killedTarget = 1;
+    		killedTarget = 30; //Some large number, likely larger than either damage given or taken
     	}
     	
     	//Died?
@@ -366,7 +372,7 @@ public class RLAgent extends Agent {
     	double startedLastTurn = 0;
     	Action action = historyView.getCommandsIssued(playernum, stateView.getTurnNumber()-1).get(attacker.id);
     	if(action != null) {
-    		startedLastTurn = 1;
+    		startedLastTurn = 10;
     	}
     	
     	return killedTarget + damageDealt - damageTaken + startedLastTurn;
