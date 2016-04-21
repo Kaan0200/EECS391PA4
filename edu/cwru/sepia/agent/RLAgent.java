@@ -57,6 +57,37 @@ public class RLAgent extends Agent {
     public final double gamma = 0.9;
     public final double learningRate = .0001;
     public final double epsilon = .02;
+    
+    /**
+     * Helper class to represent individual footmen.
+     * @author Joe
+     *
+     */
+    public class Footman {
+    	public int id, x, y, hp, team;
+    	public int lastTarget;
+    	public Footman(int id, State.StateView stateView, History.HistoryView historyView) {
+    		this.id = id;
+    		Unit.UnitView unit = stateView.getUnit(id);
+    		this.x = unit.getXPosition();
+    		this.y = unit.getYPosition();
+    		this.hp = unit.getHP();
+    		this.team = (myFootmen.contains(id)) ? 0 : ENEMY_PLAYERNUM;
+    		Map<Integer, Action> lastCommands = historyView.getCommandsIssued(playernum, stateView.getTurnNumber()-1);
+    		//Presumably every action here is a composite attack, and thus a Targeted Action
+    		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
+    		this.lastTarget = lastAction.getTargetId();
+    	}
+    	
+    	/**
+    	 * chebyshevDistance from another Footman
+    	 * @param enemy
+    	 * @return
+    	 */
+    	public double chebyshevDistFrom(Footman enemy) {
+    		return Math.max(Math.abs(x - enemy.x), Math.abs(y - enemy.y));
+    	}
+    }
 
     public RLAgent(int playernum, String[] args) {
         super(playernum);
@@ -334,9 +365,30 @@ public class RLAgent extends Agent {
                                            History.HistoryView historyView,
                                            int attackerId,
                                            int defenderId) {
+    	//First value constant
+    	double constant = 1.0;
+    	
     	//Calculate distance away
+    	Footman attacker = new Footman(attackerId, stateView, historyView);
+    	Footman defender = new Footman(defenderId, stateView, historyView);
+    	double chebyshevDistAway = attacker.chebyshevDistFrom(defender);
+    	
+    	//Health difference
+    	double hpDiff = attacker.hp - defender.hp; 
+    	
     	//Calculate the number of other footmen attacking
-        return null;
+    	double otherAttackers = 0;
+    	for(Map.Entry<Integer, Action> entry : historyView.getCommandsIssued(playernum, stateView.getTurnNumber()).entrySet()) {
+    		TargetedAction action = (TargetedAction) entry.getValue();
+    		if(myFootmen.contains(action.getUnitId()) && action.getTargetId() == defenderId) {
+    			otherAttackers++;
+    		}
+    	}
+    	
+    	//Is defender attacking me? -1 if yes and 1 if no
+    	double defenderAttacking = (defender.lastTarget == attackerId) ? -1 : 1;
+    	
+        return new double[]{constant, chebyshevDistAway, hpDiff, otherAttackers, defenderAttacking};
     }
 
     /**
