@@ -48,6 +48,10 @@ public class RLAgent extends Agent {
      * Your Q-function weights.
      */
     public Double[] weights;
+    
+    //Track the weights and features from the previous turns
+    public Double[] prevWeights; //The weights from the last time they were adjusted
+    public Map<Integer, Double[]> prevFeatures; //Map of the features for each footman in the previous turn
 
     /**
      * These variables are set for you according to the assignment definition. You can change them,
@@ -181,16 +185,19 @@ public class RLAgent extends Agent {
      */
     @Override
     public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
-        /* if(eventHasOccurred(stateView, historyView)) {
-         * 	for(Integer f: myFootmen) {
-         * 		weights = updateWeights(weights, features, reward, stateView, historyView, f);
-         * 		selectNewAction(f);
-         * 	}
-         * }
-         */
+        if(eventHasOccurred(stateView, historyView)) {
+        	for(Integer f: myFootmen) {
+        		double reward = calculateReward(stateView, historyView, f);
+        		weights = updateWeights(prevWeights, prevFeatures.get(f), reward, stateView, historyView, f);
+        		int newTarget = selectAction(stateView, historyView, f);
+        		//TODO
+        		//Add the SEPIA action for Attack(F,newTarget)
+        	}
+         }
     	
-    	//Don't go on first turn
+    	//Don't look for deaths on first turn
     	if(stateView.getTurnNumber() > 1) {
+    		//Remove all dead units from the unit lists
     		for(DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() -1)) {
     			System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
     			if(myFootmen.contains(deathLog.getDeadUnitID())) {
@@ -266,14 +273,20 @@ public class RLAgent extends Agent {
      * @param footmanId The footman we are updating the weights for
      * @return The updated weight vector.
      */
-    public double[] updateWeights(double[] oldWeights, double[] oldFeatures, double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
-        for(int i = 0; i < oldWeights.length; i++) {
-        	double reward = calculateReward(stateView, historyView, footmanId);
-        	int bestTarget = selectAction(stateView, historyView, footmanId);
+    public Double[] updateWeights(Double[] oldWeights, Double[] oldFeatures, double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
+    	prevWeights = weights;
+    	double reward = calculateReward(stateView, historyView, footmanId);
+    	int bestTarget = selectAction(stateView, historyView, footmanId);
+    	double oldQ = 0.0; //Qw(s,a)
+    	for(int i = 0; i < oldWeights.length; i++) {
+    		oldQ += oldWeights[i] * oldFeatures[i];
+    	}
+    	//wi <- wi + alpha * (R(s,a) + gamma * max a' Qw(s',a') - Qw(s,a)) * fi(s,a)
+    	for(int i = 0; i < oldWeights.length; i++) {
         	weights[i] = oldWeights[i] + learningRate * 
         			(reward + gamma * calcQValue(stateView, historyView, footmanId, bestTarget)) * oldFeatures[i];
         }
-    	return null;
+    	return weights;
     }
 
     /**
@@ -296,7 +309,17 @@ public class RLAgent extends Agent {
         		targetId = enemy;
         	}
         }
-    	return targetId;
+        
+        double randomVal = random.nextDouble();
+        if(randomVal > epsilon) {
+        	return targetId;
+        }
+        //Else perform random action!
+        else {
+        	targetId = (int) Math.round(randomVal * enemyFootmen.size());
+        	return targetId;
+        }
+    	
     }
     
 
@@ -398,7 +421,7 @@ public class RLAgent extends Agent {
                              int defenderId) {
     	double QSum = 0;
     	
-    	double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
+    	Double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
     	if(featureVector.length != weights.length) {
     		System.err.println(String.format("Error: Different sizes of weights: %i and feature vector: %i",weights.length, featureVector.length));
     	}
@@ -425,7 +448,7 @@ public class RLAgent extends Agent {
      * @param defenderId An enemy footman. The one you are considering attacking.
      * @return The array of feature function outputs.
      */
-    public double[] calculateFeatureVector(State.StateView stateView,
+    public Double[] calculateFeatureVector(State.StateView stateView,
                                            History.HistoryView historyView,
                                            int attackerId,
                                            int defenderId) {
@@ -452,7 +475,11 @@ public class RLAgent extends Agent {
     	//Is defender attacking me? -1 if yes and 1 if no
     	double defenderAttacking = (defender.lastTarget == attackerId) ? -1 : 1;
     	
-        return new double[]{constant, chebyshevDistAway, hpDiff, otherAttackers, defenderAttacking};
+    	Double[] featureVector = new Double[]{constant, chebyshevDistAway, hpDiff, otherAttackers, defenderAttacking};
+    	
+    	prevFeatures.put(attackerId, featureVector);
+    	
+        return featureVector;
     }
 
     /**
