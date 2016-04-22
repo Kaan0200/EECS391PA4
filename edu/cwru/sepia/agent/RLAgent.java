@@ -185,13 +185,15 @@ public class RLAgent extends Agent {
      */
     @Override
     public Map<Integer, Action> middleStep(State.StateView sv, History.HistoryView hv) {
-        if(eventHasOccurred(sv, hv)) {
+    	
+    	Map<Integer, Action> sepiaActions = new HashMap<Integer, Action>();
+    	
+    	if(eventHasOccurred(sv, hv)) {
         	for(Integer f: myFootmen) {
         		double reward = calculateReward(sv, hv, f);
         		weights = updateWeights(prevWeights, prevFeatures.get(f), reward, sv, hv, f);
         		int newTarget = selectAction(sv, hv, f);
-        		//TODO
-        		//Add the SEPIA action for Attack(F,newTarget)
+        		sepiaActions.put(f,Action.createCompoundAttack(f, newTarget));
         	}
          }
     	
@@ -208,7 +210,7 @@ public class RLAgent extends Agent {
     		}
     	}
     	
-    	return null;
+    	return sepiaActions;
     }
 
     /**
@@ -284,7 +286,7 @@ public class RLAgent extends Agent {
     	//wi <- wi + alpha * (R(s,a) + gamma * max a' Qw(s',a') - Qw(s,a)) * fi(s,a)
     	for(int i = 0; i < oldWeights.length; i++) {
         	weights[i] = oldWeights[i] + learningRate * 
-        			(reward + gamma * calcQValue(sv, hv, footmanId, bestTarget)) * oldFeatures[i];
+        			(reward + gamma * calcQValue(sv, hv, footmanId, bestTarget) - oldQ) * oldFeatures[i];
         }
     	return weights;
     }
