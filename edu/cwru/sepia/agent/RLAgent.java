@@ -71,19 +71,19 @@ public class RLAgent extends Agent {
     	public int id, x, y, hp, team;
     	public int lastTarget;
     	public boolean dead = false;
-    	public Footman(int id, State.StateView stateView, History.HistoryView historyView) {
+    	public Footman(int id, State.StateView sv, History.HistoryView hv) {
     		this.id = id;
-    		Unit.UnitView unit = stateView.getUnit(id);
+    		Unit.UnitView unit = sv.getUnit(id);
     		this.x = unit.getXPosition();
     		this.y = unit.getYPosition();
     		this.hp = unit.getHP();
     		this.team = (myFootmen.contains(id)) ? 0 : ENEMY_PLAYERNUM;
-    		Map<Integer, Action> lastCommands = historyView.getCommandsIssued(playernum, stateView.getTurnNumber()-1);
+    		Map<Integer, Action> lastCommands = hv.getCommandsIssued(playernum, sv.getTurnNumber()-1);
     		//Presumably every action here is a composite attack, and thus a Targeted Action
     		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
     		this.lastTarget = lastAction.getTargetId();
     		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
-    		List<DeathLog> deathLogs = historyView.getDeathLogs(stateView.getTurnNumber()-1);
+    		List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
     		for(DeathLog death : deathLogs) {
     			if(death.getDeadUnitID() == this.id) {
     				this.dead = true;
@@ -134,14 +134,14 @@ public class RLAgent extends Agent {
      * We've implemented some setup code for your convenience. Change what you need to.
      */
     @Override
-    public Map<Integer, Action> initialStep(State.StateView stateView, History.HistoryView historyView) {
+    public Map<Integer, Action> initialStep(State.StateView sv, History.HistoryView hv) {
 
         // You will need to add code to check if you are in a testing or learning episode
 
         // Find all of your units
         myFootmen = new LinkedList<>();
-        for (Integer unitId : stateView.getUnitIds(playernum)) {
-            Unit.UnitView unit = stateView.getUnit(unitId);
+        for (Integer unitId : sv.getUnitIds(playernum)) {
+            Unit.UnitView unit = sv.getUnit(unitId);
 
             String unitName = unit.getTemplateView().getName().toLowerCase();
             if (unitName.equals("footman")) {
@@ -153,8 +153,8 @@ public class RLAgent extends Agent {
 
         // Find all of the enemy units
         enemyFootmen = new LinkedList<>();
-        for (Integer unitId : stateView.getUnitIds(ENEMY_PLAYERNUM)) {
-            Unit.UnitView unit = stateView.getUnit(unitId);
+        for (Integer unitId : sv.getUnitIds(ENEMY_PLAYERNUM)) {
+            Unit.UnitView unit = sv.getUnit(unitId);
 
             String unitName = unit.getTemplateView().getName().toLowerCase();
             if (unitName.equals("footman")) {
@@ -164,19 +164,19 @@ public class RLAgent extends Agent {
             }
         }
 
-        return middleStep(stateView, historyView);
+        return middleStep(sv, hv);
     }
 
     /**
      * You will need to calculate the reward at each step and update your totals. You will also need to
      * check if an event has occurred. If it has then you will need to update your weights and select a new action.
      *
-     * If you are using the footmen vectors you will also need to remove killed units. To do so use the historyView
+     * If you are using the footmen vectors you will also need to remove killed units. To do so use the hv
      * to get a DeathLog. Each DeathLog tells you which player's unit died and the unit ID of the dead unit. To get
      * the deaths from the last turn do something similar to the following snippet. Please be aware that on the first
      * turn you should not call this as you will get nothing back.
      *
-     * for(DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() -1)) {
+     * for(DeathLog deathLog : hv.getDeathLogs(stateView.getTurnNumber() -1)) {
      *     System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
      * }
      *
@@ -184,21 +184,21 @@ public class RLAgent extends Agent {
      * @return New actions to execute or nothing if an event has not occurred.
      */
     @Override
-    public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
-        if(eventHasOccurred(stateView, historyView)) {
+    public Map<Integer, Action> middleStep(State.StateView sv, History.HistoryView hv) {
+        if(eventHasOccurred(sv, hv)) {
         	for(Integer f: myFootmen) {
-        		double reward = calculateReward(stateView, historyView, f);
-        		weights = updateWeights(prevWeights, prevFeatures.get(f), reward, stateView, historyView, f);
-        		int newTarget = selectAction(stateView, historyView, f);
+        		double reward = calculateReward(sv, hv, f);
+        		weights = updateWeights(prevWeights, prevFeatures.get(f), reward, sv, hv, f);
+        		int newTarget = selectAction(sv, hv, f);
         		//TODO
         		//Add the SEPIA action for Attack(F,newTarget)
         	}
          }
     	
     	//Don't look for deaths on first turn
-    	if(stateView.getTurnNumber() > 1) {
+    	if(sv.getTurnNumber() > 1) {
     		//Remove all dead units from the unit lists
-    		for(DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() -1)) {
+    		for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
     			System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
     			if(myFootmen.contains(deathLog.getDeadUnitID())) {
     				myFootmen.remove(deathLog.getDeadUnitID());
@@ -218,7 +218,7 @@ public class RLAgent extends Agent {
      * It is also a good idea to save your weights with the saveWeights function.
      */
     @Override
-    public void terminalStep(State.StateView stateView, History.HistoryView historyView) {
+    public void terminalStep(State.StateView sv, History.HistoryView hv) {
 
         // MAKE SURE YOU CALL printTestData after you finish a test episode.
 
@@ -240,12 +240,12 @@ public class RLAgent extends Agent {
      * for(ActionResult result : actionResults.values()) {
      *     System.out.println(result.toString());
      * }
-     * @param stateView
-     * @param historyView
+     * @param sv
+     * @param hv
      * @return
      */
-    private boolean eventHasOccurred(State.StateView stateView, History.HistoryView historyView) {
-    	Map<Integer, ActionResult> actionResults = historyView.getCommandFeedback(playernum, stateView.getTurnNumber() - 1);
+    private boolean eventHasOccurred(State.StateView sv, History.HistoryView hv) {
+    	Map<Integer, ActionResult> actionResults = hv.getCommandFeedback(playernum, sv.getTurnNumber() - 1);
     	//If one of my footmen has completed an action, he needs a new action
     	for(ActionResult result : actionResults.values()) {
     		if(myFootmen.contains(result.getAction().getUnitId()) && (result.getFeedback() == ActionFeedback.COMPLETED || result.getFeedback() == ActionFeedback.INCOMPLETEMAYBESTUCK)) {
@@ -253,8 +253,8 @@ public class RLAgent extends Agent {
     		}
     	}
     	//Any death, regardless of friend or foe, should be considered an event
-    	if(!historyView.getDeathLogs(stateView.getTurnNumber() -1).isEmpty()) {
-    		for(DeathLog deathLog : historyView.getDeathLogs(stateView.getTurnNumber() -1)) {
+    	if(!hv.getDeathLogs(sv.getTurnNumber() -1).isEmpty()) {
+    		for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
     			System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
     		}
     	    return true;
@@ -268,15 +268,15 @@ public class RLAgent extends Agent {
      * @param oldWeights Weights prior to update
      * @param oldFeatures Features from (s,a)
      * @param totalReward Cumulative discounted reward for this footman.
-     * @param stateView Current state of the game.
-     * @param historyView History of the game up until this point
+     * @param sv Current state of the game.
+     * @param hv History of the game up until this point
      * @param footmanId The footman we are updating the weights for
      * @return The updated weight vector.
      */
-    public Double[] updateWeights(Double[] oldWeights, Double[] oldFeatures, double totalReward, State.StateView stateView, History.HistoryView historyView, int footmanId) {
+    public Double[] updateWeights(Double[] oldWeights, Double[] oldFeatures, double totalReward, State.StateView sv, History.HistoryView hv, int footmanId) {
     	prevWeights = weights;
-    	double reward = calculateReward(stateView, historyView, footmanId);
-    	int bestTarget = selectAction(stateView, historyView, footmanId);
+    	double reward = calculateReward(sv, hv, footmanId);
+    	int bestTarget = selectAction(sv, hv, footmanId);
     	double oldQ = 0.0; //Qw(s,a)
     	for(int i = 0; i < oldWeights.length; i++) {
     		oldQ += oldWeights[i] * oldFeatures[i];
@@ -284,7 +284,7 @@ public class RLAgent extends Agent {
     	//wi <- wi + alpha * (R(s,a) + gamma * max a' Qw(s',a') - Qw(s,a)) * fi(s,a)
     	for(int i = 0; i < oldWeights.length; i++) {
         	weights[i] = oldWeights[i] + learningRate * 
-        			(reward + gamma * calcQValue(stateView, historyView, footmanId, bestTarget)) * oldFeatures[i];
+        			(reward + gamma * calcQValue(sv, hv, footmanId, bestTarget)) * oldFeatures[i];
         }
     	return weights;
     }
@@ -293,17 +293,17 @@ public class RLAgent extends Agent {
      * Given a footman and the current state and history of the game select the enemy that this unit should
      * attack. This is where you would do the epsilon-greedy action selection.
      *
-     * @param stateView Current state of the game
-     * @param historyView The entire history of this episode
+     * @param sv Current state of the game
+     * @param hv The entire history of this episode
      * @param attackerId The footman that will be attacking
      * @return The enemy footman ID this unit should attack
      */
-    public int selectAction(State.StateView stateView, History.HistoryView historyView, int attackerId) {
+    public int selectAction(State.StateView sv, History.HistoryView hv, int attackerId) {
         double maxValue = 0.0;
         int targetId = enemyFootmen.get(0);
         //Attack the enemy which has the highest value associated with it
         for(int enemy: enemyFootmen) {
-        	double attackingValue = calcQValue(stateView, historyView, attackerId, enemy);
+        	double attackingValue = calcQValue(sv, hv, attackerId, enemy);
         	if(attackingValue > maxValue) {
         		maxValue = attackingValue;
         		targetId = enemy;
@@ -351,14 +351,14 @@ public class RLAgent extends Agent {
      *     System.out.println("Unit " + commandEntry.getKey() + " was command to " + commandEntry.getValue().toString);
      * }
      *
-     * @param stateView The current state of the game.
+     * @param sv The current state of the game.
      * @param historyView History of the episode up until this turn.
      * @param footmanId The footman ID you are looking for the reward from.
      * @return The current reward
      */
-    public double calculateReward(State.StateView stateView, History.HistoryView historyView, int footmanId) {
-    	Footman attacker = new Footman(footmanId, stateView, historyView);
-    	Footman defender = new Footman(attacker.lastTarget, stateView, historyView);
+    public double calculateReward(State.StateView sv, History.HistoryView hv, int footmanId) {
+    	Footman attacker = new Footman(footmanId, sv, hv);
+    	Footman defender = new Footman(attacker.lastTarget, sv, hv);
     	
     	//Killed target?
     	double killedTarget = 0;
@@ -374,7 +374,7 @@ public class RLAgent extends Agent {
     	
     	//Damage dealt
     	double damageDealt = 0;
-    	for(DamageLog damageLog : historyView.getDamageLogs(stateView.getTurnNumber()-1)) {
+    	for(DamageLog damageLog : hv.getDamageLogs(sv.getTurnNumber()-1)) {
     		if(damageLog.getAttackerID() == attacker.id) {
     			damageDealt = damageLog.getDamage();
     			break;
@@ -383,7 +383,7 @@ public class RLAgent extends Agent {
     	
     	//Damage taken
     	double damageTaken = 0;
-    	for(DamageLog damageLog : historyView.getDamageLogs(stateView.getTurnNumber()-1)) {
+    	for(DamageLog damageLog : hv.getDamageLogs(sv.getTurnNumber()-1)) {
     		if(damageLog.getDefenderID() == attacker.id) {
     			damageTaken = damageLog.getDamage();
     			break;
@@ -393,7 +393,7 @@ public class RLAgent extends Agent {
     	//Started action last turn
     	//I guess it's beneficial if this footman just recently started an action?
     	double startedLastTurn = 0;
-    	Action action = historyView.getCommandsIssued(playernum, stateView.getTurnNumber()-1).get(attacker.id);
+    	Action action = hv.getCommandsIssued(playernum, sv.getTurnNumber()-1).get(attacker.id);
     	if(action != null) {
     		startedLastTurn = 10;
     	}
@@ -409,19 +409,19 @@ public class RLAgent extends Agent {
      * This returns the Q-value according to your feature approximation. This is where you will calculate
      * your features and multiply them by your current weights to get the approximate Q-value.
      *
-     * @param stateView Current SEPIA state
-     * @param historyView Episode history up to this point in the game
+     * @param sv Current SEPIA state
+     * @param hv Episode history up to this point in the game
      * @param attackerId Your footman. The one doing the attacking.
      * @param defenderId An enemy footman that your footman would be attacking
      * @return The approximate Q-value
      */
-    public double calcQValue(State.StateView stateView,
-                             History.HistoryView historyView,
+    public double calcQValue(State.StateView sv,
+                             History.HistoryView hv,
                              int attackerId,
                              int defenderId) {
     	double QSum = 0;
     	
-    	Double[] featureVector = calculateFeatureVector(stateView, historyView, attackerId, defenderId);
+    	Double[] featureVector = calculateFeatureVector(sv, hv, attackerId, defenderId);
     	if(featureVector.length != weights.length) {
     		System.err.println(String.format("Error: Different sizes of weights: %i and feature vector: %i",weights.length, featureVector.length));
     	}
@@ -443,21 +443,21 @@ public class RLAgent extends Agent {
      * description.
      *
      * @param stateView Current state of the SEPIA game
-     * @param historyView History of the game up until this turn
+     * @param hv History of the game up until this turn
      * @param attackerId Your footman. The one doing the attacking.
      * @param defenderId An enemy footman. The one you are considering attacking.
      * @return The array of feature function outputs.
      */
-    public Double[] calculateFeatureVector(State.StateView stateView,
-                                           History.HistoryView historyView,
+    public Double[] calculateFeatureVector(State.StateView sv,
+                                           History.HistoryView hv,
                                            int attackerId,
                                            int defenderId) {
     	//First value constant
     	double constant = 1.0;
     	
     	//Calculate distance away
-    	Footman attacker = new Footman(attackerId, stateView, historyView);
-    	Footman defender = new Footman(defenderId, stateView, historyView);
+    	Footman attacker = new Footman(attackerId, sv, hv);
+    	Footman defender = new Footman(defenderId, sv, hv);
     	double chebyshevDistAway = attacker.chebyshevDistFrom(defender);
     	
     	//Health difference
@@ -465,7 +465,7 @@ public class RLAgent extends Agent {
     	
     	//Calculate the number of other footmen attacking
     	double otherAttackers = 0;
-    	for(Map.Entry<Integer, Action> entry : historyView.getCommandsIssued(playernum, stateView.getTurnNumber()).entrySet()) {
+    	for(Map.Entry<Integer, Action> entry : hv.getCommandsIssued(playernum, sv.getTurnNumber()).entrySet()) {
     		TargetedAction action = (TargetedAction) entry.getValue();
     		if(myFootmen.contains(action.getUnitId()) && action.getTargetId() == defenderId) {
     			otherAttackers++;
