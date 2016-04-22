@@ -10,6 +10,8 @@ import edu.cwru.sepia.environment.model.history.History;
 import edu.cwru.sepia.environment.model.state.State;
 import edu.cwru.sepia.environment.model.state.Unit;
 
+import edu.cwru.sepia.agent.Position;
+
 import java.io.*;
 import java.util.*;
 
@@ -91,14 +93,14 @@ public class RLAgent extends Agent {
      * We've implemented some setup code for your convenience. Change what you need to.
      */
     @Override
-    public Map<Integer, Action> initialStep(State.StateView stateView, History.HistoryView historyView) {
+    public Map<Integer, Action> initialStep(State.StateView sv, History.HistoryView hv) {
 
         // You will need to add code to check if you are in a testing or learning episode
 
         // Find all of your units
         myFootmen = new LinkedList<>();
-        for (Integer unitId : stateView.getUnitIds(playernum)) {
-            Unit.UnitView unit = stateView.getUnit(unitId);
+        for (Integer unitId : sv.getUnitIds(playernum)) {
+            Unit.UnitView unit = sv.getUnit(unitId);
 
             String unitName = unit.getTemplateView().getName().toLowerCase();
             if (unitName.equals("footman")) {
@@ -110,8 +112,8 @@ public class RLAgent extends Agent {
 
         // Find all of the enemy units
         enemyFootmen = new LinkedList<>();
-        for (Integer unitId : stateView.getUnitIds(ENEMY_PLAYERNUM)) {
-            Unit.UnitView unit = stateView.getUnit(unitId);
+        for (Integer unitId : sv.getUnitIds(ENEMY_PLAYERNUM)) {
+            Unit.UnitView unit = sv.getUnit(unitId);
 
             String unitName = unit.getTemplateView().getName().toLowerCase();
             if (unitName.equals("footman")) {
@@ -121,7 +123,7 @@ public class RLAgent extends Agent {
             }
         }
 
-        return middleStep(stateView, historyView);
+        return middleStep(sv, hv);
     }
 
     /**
@@ -151,7 +153,7 @@ public class RLAgent extends Agent {
      * @return New actions to execute or nothing if an event has not occurred.
      */
     @Override
-    public Map<Integer, Action> middleStep(State.StateView stateView, History.HistoryView historyView) {
+    public Map<Integer, Action> middleStep(State.StateView sv, History.HistoryView hv) {
         return null;
     }
 
@@ -162,7 +164,7 @@ public class RLAgent extends Agent {
      * It is also a good idea to save your weights with the saveWeights function.
      */
     @Override
-    public void terminalStep(State.StateView stateView, History.HistoryView historyView) {
+    public void terminalStep(State.StateView sv, History.HistoryView hv) {
 
         // MAKE SURE YOU CALL printTestData after you finish a test episode.
 
@@ -194,7 +196,7 @@ public class RLAgent extends Agent {
      * @param attackerId The footman that will be attacking
      * @return The enemy footman ID this unit should attack
      */
-    public int selectAction(State.StateView stateView, History.HistoryView historyView, int attackerId) {
+    public int selectAction(State.StateView sv, History.HistoryView hv, int attackerId) {
         return -1;
     }
 
@@ -231,7 +233,7 @@ public class RLAgent extends Agent {
      * @param footmanId The footman ID you are looking for the reward from.
      * @return The current reward
      */
-    public double calculateReward(State.StateView stateView, History.HistoryView historyView, int footmanId) {
+    public double calculateReward(State.StateView sv, History.HistoryView hv, int footmanId) {
         return 0;
     }
 
@@ -249,8 +251,8 @@ public class RLAgent extends Agent {
      * @param defenderId An enemy footman that your footman would be attacking
      * @return The approximate Q-value
      */
-    public double calcQValue(State.StateView stateView,
-                             History.HistoryView historyView,
+    public double calcQValue(State.StateView sv,
+                             History.HistoryView hv,
                              int attackerId,
                              int defenderId) {
         return 0;
@@ -273,10 +275,15 @@ public class RLAgent extends Agent {
      * @param defenderId An enemy footman. The one you are considering attacking.
      * @return The array of feature function outputs.
      */
-    public double[] calculateFeatureVector(State.StateView stateView,
-                                           History.HistoryView historyView,
+    public double[] calculateFeatureVector(State.StateView sv,
+                                           History.HistoryView hv,
                                            int attackerId,
                                            int defenderId) {
+    	// get the distance between these two
+    	Position attackerPos = new Position(sv.getUnit(attackerId).getXPosition(), sv.getUnit(attackerId).getYPosition());
+    	Position defenderPos = new Position(sv.getUnit(defenderId).getXPosition(), sv.getUnit(defenderId).getYPosition());
+    	double chebyshevDist = attackerPos.chebyshevDistance(defenderPos);
+    	
         return null;
     }
 
