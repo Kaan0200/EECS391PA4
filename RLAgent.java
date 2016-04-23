@@ -56,7 +56,6 @@ public class RLAgent extends Agent {
     public Double[] weights;
     
     //Track the weights and features from the previous turns
-    public Double[] prevWeights; //The weights from the last time they were adjusted
     public Map<Integer, Double[]> prevFeatures; //Map of the features for each footman in the previous turn
 
     /**
@@ -84,16 +83,20 @@ public class RLAgent extends Agent {
     		this.y = unit.getYPosition();
     		this.hp = unit.getHP();
     		this.team = (myFootmen.contains(id)) ? 0 : ENEMY_PLAYERNUM;
-    		Map<Integer, Action> lastCommands = hv.getCommandsIssued(playernum, sv.getTurnNumber()-1);
-    		//Presumably every action here is a composite attack, and thus a Targeted Action
-    		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
-    		this.lastTarget = lastAction.getTargetId();
-    		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
-    		List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
-    		for(DeathLog death : deathLogs) {
-    			if(death.getDeadUnitID() == this.id) {
-    				this.dead = true;
-    			}
+    		if(sv.getTurnNumber() > 0) {
+	    		Map<Integer, Action> lastCommands = hv.getCommandsIssued(playernum, sv.getTurnNumber()-1);
+	    		//Presumably every action here is a composite attack, and thus a Targeted Action
+	    		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
+	    		this.lastTarget = lastAction.getTargetId();
+	    		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
+	    		List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
+	    		for(DeathLog death : deathLogs) {
+	    			if(death.getDeadUnitID() == this.id) {
+	    				this.dead = true;
+	    			}
+	    		}
+    		} else {
+    			this.lastTarget = enemyFootmen.get(0);
     		}
     	}
     	
@@ -195,10 +198,10 @@ public class RLAgent extends Agent {
     	
     	Map<Integer, Action> sepiaActions = new HashMap<Integer, Action>();
     	
-    	if(eventHasOccurred(sv, hv)) {
+    	if(eventHasOccurred(sv, hv) || sv.getTurnNumber() == 0) {
         	for(Integer f: myFootmen) {
         		double reward = calculateReward(sv, hv, f);
-        		weights = updateWeights(prevWeights, prevFeatures.get(f), reward, sv, hv, f);
+        		weights = updateWeights(weights, prevFeatures.get(f), reward, sv, hv, f);
         		int newTarget = selectAction(sv, hv, f);
         		sepiaActions.put(f,Action.createCompoundAttack(f, newTarget));
         	}
@@ -233,6 +236,9 @@ public class RLAgent extends Agent {
 
         // Save your weights
         saveWeights(weights);
+        
+        // Save the rest of player data
+        savePlayerData(System.out);
 
     }
     
@@ -305,7 +311,6 @@ public class RLAgent extends Agent {
      * @return The updated weight vector.
      */
     public Double[] updateWeights(Double[] oldWeights, Double[] oldFeatures, double totalReward, State.StateView sv, History.HistoryView hv, int footmanId) {
-    	prevWeights = weights;
     	double reward = calculateReward(sv, hv, footmanId);
     	int bestTarget = selectAction(sv, hv, footmanId);
     	double oldQ = 0.0; //Qw(s,a)
@@ -431,6 +436,14 @@ public class RLAgent extends Agent {
     	
     	return killedTarget + damageDealt - damageTaken + startedLastTurn;
     }
+    
+    private double cumulativeReward(State.StateView sv, History.HistoryView hv) {
+    	double totalReward = 0.0;
+    	for(Integer f: myFootmen) {
+    		totalReward += calculateReward(sv, hv, f);
+    	}
+    	return totalReward;
+    }
 
     /**
      * Calculate the Q-Value for a given state action pair. The state in this scenario is the current
@@ -494,7 +507,7 @@ public class RLAgent extends Agent {
     	//Health difference
     	double hpDiff = attacker.hp - defender.hp; 
     	
-    	//Calculate the number of other footmen attacking
+    	//Calculate the number of other footmen attacking that same target
     	double otherAttackers = 0;
     	for(Map.Entry<Integer, Action> entry : hv.getCommandsIssued(playernum, sv.getTurnNumber()).entrySet()) {
     		TargetedAction action = (TargetedAction) entry.getValue();
@@ -602,7 +615,7 @@ public class RLAgent extends Agent {
 
     @Override
     public void savePlayerData(OutputStream outputStream) {
-
+   
     }
 
     @Override
