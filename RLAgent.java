@@ -84,12 +84,15 @@ public class RLAgent extends Agent {
     		this.team = (myFootmen.contains(id)) ? 0 : ENEMY_PLAYERNUM;
     		if(sv.getTurnNumber() > 0) {
 	    		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
-	    		List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
+	    		/*List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
 	    		for(DeathLog death : deathLogs) {
 	    			if(death.getDeadUnitID() == this.id) {
 	    				this.dead = true;
 	    			}
-	    		}
+	    		} */
+    			if(sv.getUnit(id) == null) {
+    				this.dead = true;
+    			}
     		}
     		//Presumably every action here is a composite attack, and thus a Targeted Action
     		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
@@ -216,6 +219,19 @@ public class RLAgent extends Agent {
     	
     	HashMap<Integer, Action> sepiaActions = new HashMap<Integer, Action>();
     	
+    	//Don't look for deaths on first turn
+    	if(sv.getTurnNumber() > 1) {
+    		//Remove all dead units from the unit lists
+    		for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
+    			System.out.println("Death- Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
+    			if(myFootmen.contains(deathLog.getDeadUnitID())) {
+    				myFootmen.remove(myFootmen.indexOf(deathLog.getDeadUnitID()));
+    			} else {
+    				enemyFootmen.remove(enemyFootmen.indexOf(deathLog.getDeadUnitID()));
+    			}
+    		}
+    	}
+    	
     	if(eventHasOccurred(sv, hv) || sv.getTurnNumber() == 0) {
         	for(Integer f: myFootmen) {
         		double reward = calculateReward(sv, hv, f);
@@ -232,19 +248,6 @@ public class RLAgent extends Agent {
         		lastCommands.put(f,Action.createCompoundAttack(f, newTarget));
         	}
          }
-    	
-    	//Don't look for deaths on first turn
-    	if(sv.getTurnNumber() > 1) {
-    		//Remove all dead units from the unit lists
-    		for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
-    			System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
-    			if(myFootmen.contains(deathLog.getDeadUnitID())) {
-    				myFootmen.remove(deathLog.getDeadUnitID());
-    			} else {
-    				enemyFootmen.remove(deathLog.getDeadUnitID());
-    			}
-    		}
-    	}
     	
     	return sepiaActions;
     }
@@ -295,9 +298,9 @@ public class RLAgent extends Agent {
     	}
     	//Any death, regardless of friend or foe, should be considered an event
     	if(!hv.getDeathLogs(sv.getTurnNumber() -1).isEmpty()) {
-    		for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
-    			System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
-    		}
+    		//for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
+    			//System.out.println("Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
+    		//}
     	    return true;
     	}
     	//else 
