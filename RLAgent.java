@@ -334,7 +334,9 @@ public class RLAgent extends Agent {
     			currEvalEps = 0;
     			isLearning = true;
     		}
-    		currEvalEps++;
+    		else {
+    			currEvalEps++;
+    		}
     	} else {
     		isLearning = true;
     		currEpisode++;
