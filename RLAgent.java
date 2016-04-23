@@ -279,12 +279,19 @@ public class RLAgent extends Agent {
                                            History.HistoryView hv,
                                            int attackerId,
                                            int defenderId) {
-    	// get the distance between these two
+    	double[] returnArr = new double[2];
+    	
+    	// get true or false digit depending if agent was attacked last time
+    	for(DamageLog d : hv.getDamageLogs(sv.getTurnNumber() - 1)){
+    		returnArr[1] = d.getDefenderID() == defenderId ? 1.00 : 0.00; 
+    	}
+    	
+    	// get the distance between these two and place into array
     	Position attackerPos = new Position(sv.getUnit(attackerId).getXPosition(), sv.getUnit(attackerId).getYPosition());
     	Position defenderPos = new Position(sv.getUnit(defenderId).getXPosition(), sv.getUnit(defenderId).getYPosition());
-    	double chebyshevDist = attackerPos.chebyshevDistance(defenderPos);
+    	returnArr[2] = attackerPos.euclideanDistance(defenderPos);
     	
-        return null;
+        return returnArr;
     }
 
     /**
