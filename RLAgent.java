@@ -21,7 +21,13 @@ public class RLAgent extends Agent {
      * and call sys.exit(0)
      */
     public final int numEpisodes;
-
+    public int currEpisode = 0;
+    
+    public final int numLearnEps = 10;
+    public final int numEvalEps = 5;
+    public int currEvalEps = 0;
+    public boolean isLearning;
+    
     /**
      * List of your footmen and your enemies footmen
      */
@@ -135,8 +141,9 @@ public class RLAgent extends Agent {
      */
     @Override
     public Map<Integer, Action> initialStep(State.StateView sv, History.HistoryView hv) {
-
-        // You will need to add code to check if you are in a testing or learning episode
+    	
+    	// at the beginning of a turn
+        if (sv.getTurnNumber() == 0){handleEpisodeCount();}
 
         // Find all of your units
         myFootmen = new LinkedList<>();
@@ -263,6 +270,28 @@ public class RLAgent extends Agent {
     	}
     	//else 
     	return false;
+    }
+    
+    /**
+     * Handles the logic for determining if we are doing a learning or evaluation episode
+     */
+    private void handleEpisodeCount(){
+
+    	// do we need to do the evaluation episodes
+    	if ((currEpisode % numLearnEps == 0) && (currEpisode != 0)){
+    		isLearning = false;
+    		if (currEvalEps > numEvalEps){
+    			currEpisode++;
+    			currEvalEps = 0;
+    			isLearning = true;
+    		}
+    		currEvalEps++;
+    	} else {
+    		isLearning = true;
+    		currEpisode++;
+    	}
+     	
+    	System.out.println("Beginning "+ (isLearning?"Learning":"Evaluation") +" Episode "+(isLearning?currEpisode:currEvalEps));
     }
 
     /**
