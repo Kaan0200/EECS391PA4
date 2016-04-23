@@ -28,6 +28,8 @@ public class RLAgent extends Agent {
     public int currEvalEps = 0;
     public boolean isLearning;
     
+    public int timestep = 0;
+    
     /**
      * List of your footmen and your enemies footmen
      */
@@ -56,10 +58,13 @@ public class RLAgent extends Agent {
     public Double[] weights;
     
     //Track the weights and features from the previous turns
-    public Double[] prevWeights;
     public HashMap<Integer, Double[]> prevFeatures; //Map of the features for each footman in the previous turn
-
+    //Track the last known commands issues to all units on the field
     public HashMap<Integer, Action> lastCommands;
+    //Tracks the cumulative rewards of each of the testing episodes in a block of testing episodes
+    public Double[] cumulativeRewards = new Double[numEvalEps];
+    
+    public LinkedList<Double> averageRewards = new LinkedList<>();
     
     /**
      * These variables are set for you according to the assignment definition. You can change them,
@@ -82,18 +87,9 @@ public class RLAgent extends Agent {
     	public Footman(int id, State.StateView sv, History.HistoryView hv) {
     		this.id = id;
     		this.team = (myFootmen.contains(id)) ? 0 : ENEMY_PLAYERNUM;
-    		if(sv.getTurnNumber() > 0) {
-	    		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
-	    		/*List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
-	    		for(DeathLog death : deathLogs) {
-	    			if(death.getDeadUnitID() == this.id) {
-	    				this.dead = true;
-	    			}
-	    		} */
-    			if(sv.getUnit(id) == null) {
-    				this.dead = true;
-    			}
-    		}
+    		if(sv.getUnit(id) == null) {
+				this.dead = true;
+			}
     		//Presumably every action here is a composite attack, and thus a Targeted Action
     		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
     		if(lastAction != null) {
@@ -167,7 +163,14 @@ public class RLAgent extends Agent {
     public Map<Integer, Action> initialStep(State.StateView sv, History.HistoryView hv) {
     	
     	// at the beginning of a turn
-        if (sv.getTurnNumber() == 0){handleEpisodeCount();}
+        if (sv.getTurnNumber() == 0) {
+        	handleEpisodeCount();
+        	timestep = 0;
+        	//Need to initialize the cumulativeRewards
+        	for(int i = 0; i < cumulativeRewards.length; i++) {
+        		cumulativeRewards[i] = 0.0;
+        	}
+        }
 
         // Find all of your units
         myFootmen = new LinkedList<>();
@@ -218,12 +221,13 @@ public class RLAgent extends Agent {
     public Map<Integer, Action> middleStep(State.StateView sv, History.HistoryView hv) {
     	
     	HashMap<Integer, Action> sepiaActions = new HashMap<Integer, Action>();
+    	timestep++;
     	
     	//Don't look for deaths on first turn
     	if(sv.getTurnNumber() > 1) {
     		//Remove all dead units from the unit lists
     		for(DeathLog deathLog : hv.getDeathLogs(sv.getTurnNumber() -1)) {
-    			System.out.println("Death- Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
+    			//System.out.println("Death- Player: " + deathLog.getController() + " unit: " + deathLog.getDeadUnitID());
     			if(myFootmen.contains(deathLog.getDeadUnitID())) {
     				myFootmen.remove(myFootmen.indexOf(deathLog.getDeadUnitID()));
     			} else {
@@ -247,6 +251,9 @@ public class RLAgent extends Agent {
         		//Keep a record of all of the latest commands issued
         		lastCommands.put(f,Action.createCompoundAttack(f, newTarget));
         	}
+        	if(!isLearning) {
+        		cumulativeRewards[currEvalEps-1] += cumulativeReward(sv, hv);
+        	}
          }
     	
     	return sepiaActions;
@@ -262,7 +269,14 @@ public class RLAgent extends Agent {
     public void terminalStep(State.StateView sv, History.HistoryView hv) {
 
         // MAKE SURE YOU CALL printTestData after you finish a test episode.
-
+    	// And terminalStep ALWAYS happens at the end of the episode- we don't need to perform any check on that
+    	if(!isLearning) {
+    		if(currEvalEps == numEvalEps) {
+    			averageRewards.add(averageCumulative());
+    			printTestData(averageRewards);
+    		}
+    	}
+    	
         // Save your weights
         saveWeights(weights);
         
@@ -315,7 +329,7 @@ public class RLAgent extends Agent {
     	// do we need to do the evaluation episodes
     	if ((currEpisode % numLearnEps == 0) && (currEpisode != 0)){
     		isLearning = false;
-    		if (currEvalEps > numEvalEps){
+    		if (currEvalEps >= numEvalEps){
     			currEpisode++;
     			currEvalEps = 0;
     			isLearning = true;
@@ -467,12 +481,31 @@ public class RLAgent extends Agent {
     	return killedTarget + damageDealt - damageTaken + startedLastTurn;
     }
     
+    /**
+     * The total, discounted reward from this turn
+     * @param sv
+     * @param hv
+     * @return
+     */
     private double cumulativeReward(State.StateView sv, History.HistoryView hv) {
     	double totalReward = 0.0;
     	for(Integer f: myFootmen) {
-    		totalReward += calculateReward(sv, hv, f);
+    		totalReward += Math.pow(gamma, timestep) * calculateReward(sv, hv, f);
     	}
     	return totalReward;
+    }
+    
+    /**
+     * Get the average cumulative reward for the last 5 testing episodes
+     * @return
+     */
+    private double averageCumulative() {
+    	double average = 0.0;
+    	for(double d : cumulativeRewards) {
+    		average += d;
+    	}
+    	average = average/cumulativeRewards.length;
+    	return average;
     }
 
     /**
@@ -568,7 +601,7 @@ public class RLAgent extends Agent {
         System.out.println("Games Played      Average Cumulative Reward");
         System.out.println("-------------     -------------------------");
         for (int i = 0; i < averageRewards.size(); i++) {
-            String gamesPlayed = Integer.toString(10*i);
+            String gamesPlayed = Integer.toString(10*(i+1));
             String averageReward = String.format("%.2f", averageRewards.get(i));
 
             int numSpaces = "-------------     ".length() - gamesPlayed.length();
