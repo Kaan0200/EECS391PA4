@@ -56,8 +56,11 @@ public class RLAgent extends Agent {
     public Double[] weights;
     
     //Track the weights and features from the previous turns
-    public Map<Integer, Double[]> prevFeatures; //Map of the features for each footman in the previous turn
+    public Double[] prevWeights;
+    public HashMap<Integer, Double[]> prevFeatures; //Map of the features for each footman in the previous turn
 
+    public HashMap<Integer, Action> lastCommands;
+    
     /**
      * These variables are set for you according to the assignment definition. You can change them,
      * but it is not recommended. If you do change them please let us know and explain your reasoning for
@@ -78,16 +81,8 @@ public class RLAgent extends Agent {
     	public boolean dead = false;
     	public Footman(int id, State.StateView sv, History.HistoryView hv) {
     		this.id = id;
-    		Unit.UnitView unit = sv.getUnit(id);
-    		this.x = unit.getXPosition();
-    		this.y = unit.getYPosition();
-    		this.hp = unit.getHP();
     		this.team = (myFootmen.contains(id)) ? 0 : ENEMY_PLAYERNUM;
     		if(sv.getTurnNumber() > 0) {
-	    		Map<Integer, Action> lastCommands = hv.getCommandsIssued(playernum, sv.getTurnNumber()-1);
-	    		//Presumably every action here is a composite attack, and thus a Targeted Action
-	    		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
-	    		this.lastTarget = lastAction.getTargetId();
 	    		//Officially check the deathLogs to confirm death rather than assume that hp will tell you if the unit is dead
 	    		List<DeathLog> deathLogs = hv.getDeathLogs(sv.getTurnNumber()-1);
 	    		for(DeathLog death : deathLogs) {
@@ -95,9 +90,25 @@ public class RLAgent extends Agent {
 	    				this.dead = true;
 	    			}
 	    		}
-    		} else {
-    			this.lastTarget = enemyFootmen.get(0);
     		}
+    		//Presumably every action here is a composite attack, and thus a Targeted Action
+    		TargetedAction lastAction = (TargetedAction) lastCommands.get(id);
+    		if(lastAction != null) {
+    			this.lastTarget = lastAction.getTargetId();
+    		} else { 
+    			this.lastTarget = enemyFootmen.get(0); 
+    		}
+    		if(!dead) {
+	    		Unit.UnitView unit = sv.getUnit(id);
+	    		this.x = unit.getXPosition();
+	    		this.y = unit.getYPosition();
+	    		this.hp = unit.getHP();
+    		}
+    		//If dead, the unit object will return null when trying to retrieve position
+    		else {
+    			this.x = 0; this.y = 0; this.hp = 0;
+    		}
+    		
     	}
     	
     	/**
@@ -136,6 +147,13 @@ public class RLAgent extends Agent {
             for (int i = 0; i < weights.length; i++) {
                 weights[i] = random.nextDouble() * 2 - 1;
             }
+        }
+        
+        if(prevFeatures == null) {
+        	prevFeatures = new HashMap<>();
+        }
+        if(lastCommands == null) {
+        	lastCommands = new HashMap<>();
         }
     }
 
@@ -196,14 +214,22 @@ public class RLAgent extends Agent {
     @Override
     public Map<Integer, Action> middleStep(State.StateView sv, History.HistoryView hv) {
     	
-    	Map<Integer, Action> sepiaActions = new HashMap<Integer, Action>();
+    	HashMap<Integer, Action> sepiaActions = new HashMap<Integer, Action>();
     	
     	if(eventHasOccurred(sv, hv) || sv.getTurnNumber() == 0) {
         	for(Integer f: myFootmen) {
         		double reward = calculateReward(sv, hv, f);
-        		weights = updateWeights(weights, prevFeatures.get(f), reward, sv, hv, f);
+        		//First check if this footman has previous features on record
+        		Double[] oldFeatures = prevFeatures.get(f);
+        		//If not, give 0 for all features
+        		if(oldFeatures == null) {
+        			oldFeatures = new Double[]{0.0,0.0,0.0,0.0,0.0};
+        		}
+        		weights = updateWeights(weights, oldFeatures, reward, sv, hv, f);
         		int newTarget = selectAction(sv, hv, f);
         		sepiaActions.put(f,Action.createCompoundAttack(f, newTarget));
+        		//Keep a record of all of the latest commands issued
+        		lastCommands.put(f,Action.createCompoundAttack(f, newTarget));
         	}
          }
     	
@@ -421,8 +447,9 @@ public class RLAgent extends Agent {
     	double damageTaken = 0;
     	for(DamageLog damageLog : hv.getDamageLogs(sv.getTurnNumber()-1)) {
     		if(damageLog.getDefenderID() == attacker.id) {
-    			damageTaken = damageLog.getDamage();
-    			break;
+    			damageTaken += damageLog.getDamage();
+    			//Evidence that the last command issued to this enemy unit was to attack this unit
+    			lastCommands.put(defender.id, Action.createCompoundAttack(defender.id, attacker.id));
     		}
     	}
     	
