@@ -22,6 +22,7 @@ public class RLAgent extends Agent {
      */
     public final int numEpisodes;
     public int currEpisode = 0;
+    public int totalEp = 0;
     
     public final int numLearnEps = 10;
     public final int numEvalEps = 5;
@@ -273,7 +274,9 @@ public class RLAgent extends Agent {
     	if(!isLearning) {
     		if(currEvalEps == numEvalEps) {
     			averageRewards.add(averageCumulative());
-    			printTestData(averageRewards);
+    			if(totalEp == numEpisodes) {
+    				printTestData(averageRewards);
+    			}
     		}
     	}
     	
@@ -325,7 +328,10 @@ public class RLAgent extends Agent {
      * Handles the logic for determining if we are doing a learning or evaluation episode
      */
     private void handleEpisodeCount(){
-
+    	totalEp++;
+    	if(totalEp > numEpisodes) {
+    		System.exit(0);
+    	}
     	// do we need to do the evaluation episodes
     	if ((currEpisode % numLearnEps == 0) && (currEpisode != 0)){
     		isLearning = false;
@@ -342,7 +348,8 @@ public class RLAgent extends Agent {
     		currEpisode++;
     	}
      	
-    	System.out.println("Beginning "+ (isLearning?"Learning":"Evaluation") +" Episode "+(isLearning?currEpisode:currEvalEps));
+    	//System.out.println("Beginning "+ (isLearning?"Learning":"Evaluation") +" Episode "+(isLearning?currEpisode:currEvalEps) + 
+    		//	" - " + totalEp);
     }
 
     /**
@@ -611,7 +618,7 @@ public class RLAgent extends Agent {
             for (int j = 0; j < numSpaces; j++) {
                 spaceBuffer.append(" ");
             }
-            System.out.println(gamesPlayed + spaceBuffer.toString() + averageReward);
+            System.out.println(gamesPlayed + "," + spaceBuffer.toString() + averageReward);
         }
         System.out.println("");
     }
@@ -637,7 +644,7 @@ public class RLAgent extends Agent {
             BufferedWriter writer = new BufferedWriter(new FileWriter(path, false));
 
             for (double weight : weights) {
-                writer.write(String.format("%f\n", weight));
+                writer.write(weight + "\n");
             }
             writer.flush();
             writer.close();
